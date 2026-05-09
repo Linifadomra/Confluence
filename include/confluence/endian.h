@@ -1,5 +1,5 @@
-#ifndef GC_ENDIAN
-#define GC_ENDIAN
+#ifndef CONFLUENCE_ENDIAN
+#define CONFLUENCE_ENDIAN
 
 #include <stdint.h>
 #include <stddef.h>

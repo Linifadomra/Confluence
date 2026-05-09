@@ -1,5 +1,5 @@
-#ifndef GC_RARC
-#define GC_RARC
+#ifndef CONFLUENCE_RARC_H
+#define CONFLUENCE_RARC_H
 
 #include "types.h"
 

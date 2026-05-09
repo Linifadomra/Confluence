@@ -1,5 +1,5 @@
-#ifndef GC_DOL_H
-#define GC_DOL_H
+#ifndef CONFLUENCE_DOL_H
+#define CONFLUENCE_DOL_H
 #include <stdint.h>
 #include <stddef.h>
 #ifdef __cplusplus

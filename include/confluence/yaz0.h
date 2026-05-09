@@ -1,5 +1,5 @@
-#ifndef GC_YAZ0_H
-#define GC_YAZ0_H
+#ifndef CONFLUENCE_YAZ0_H
+#define CONFLUENCE_YAZ0_H
 
 #include <stdint.h>
 #include <stddef.h>

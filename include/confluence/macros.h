@@ -1,5 +1,5 @@
-#ifndef SIPHON_MACROS_H
-#define SIPHON_MACROS_H
+#ifndef CONFLUENCE_MACROS_H
+#define CONFLUENCE_MACROS_H
 
 #include <sys/stat.h>
 

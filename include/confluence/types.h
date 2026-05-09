@@ -1,5 +1,5 @@
-#ifndef GC_DISC_H
-#define GC_DISC_H
+#ifndef CONFLUENCE_TYPES_H
+#define CONFLUENCE_TYPES_H
 #include <stdint.h>
 #include <stddef.h>
 #ifdef __cplusplus
