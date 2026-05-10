@@ -116,6 +116,7 @@ static GCArc* gc_arc_open_common(unsigned char* data, size_t size, int owns) {
                 out->type = GC_ENTRY_FILE;
                 out->discOffset = data_off + off_field;
                 out->size = size;
+                out->id = gc_be16(fe + 0x00);
             }
         }
     }
@@ -334,6 +335,8 @@ int gc_arc_add_file(GCArc* arc, const char* node_type, const char* filename,
 
     if (arc->keep_ids_synced) {
         arc->next_free_file_id = (uint16_t)new_count;
+    } else {
+        e->id = arc->next_free_file_id++;
     }
 
     return insert_at;
@@ -471,7 +474,6 @@ int gc_arc_save(GCArc* arc, void** out_data, size_t* out_size) {
     aram_size = next_data_off - mram_size;
     pos = file_data_off + next_data_off;
 
-    uint16_t file_id = 0;
     for (int i = 0; i < arc->entry_count; i++) {
         GCEntry* e  = &arc->entries[i];
         uint8_t* ep = buf + entries_list_off + i * 0x14;
@@ -480,7 +482,7 @@ int gc_arc_save(GCArc* arc, void** out_data, size_t* out_size) {
         const char* nm = e->name ? e->name : "";
         for (const char* c = nm; *c; c++) { hash *= 3; hash += (uint8_t)*c; }
 
-        uint16_t id = file_id;
+        uint16_t id = e->id;
 
         uint8_t attr = (e->type == GC_ENTRY_FILE)
             ? (uint8_t)(GC_ENTRY_FILE | 0x10)
