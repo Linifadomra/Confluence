@@ -28,4 +28,4 @@ int gc_arc_save(GCArc* arc, void** out_data, size_t* out_size);
 }
 #endif
 
-#endif /* GC_RARC */
+#endif /* CONFLUENCE_RARC_H */

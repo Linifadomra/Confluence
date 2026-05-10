@@ -1,5 +1,5 @@
-#ifndef CONFLUENCE_ENDIAN
-#define CONFLUENCE_ENDIAN
+#ifndef CONFLUENCE_ENDIAN_H
+#define CONFLUENCE_ENDIAN_H
 
 #include <string.h>
 #include <stdint.h>
@@ -54,4 +54,4 @@ static inline void gc_write_be_f32(uint8_t* p, float v) {
 }
 #endif
 
-#endif /* GC_ENDIAN */
+#endif /* CONFLUENCE_ENDIAN_H */

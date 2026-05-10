@@ -25,4 +25,5 @@ int  dol_va_to_file(const DOLFile* d, uint32_t va, uint32_t size, uint32_t* file
 #ifdef __cplusplus
 }
 #endif
-#endif
+
+#endif /* CONFLUENCE_DOL_H */

@@ -23,4 +23,5 @@ typedef struct {
 #ifdef __cplusplus
 }
 #endif
-#endif
+
+#endif /* CONFLUENCE_TYPES_H */

@@ -4,10 +4,18 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int gc_yaz0_is_compressed(const uint8_t* bytes, size_t n);
 
 // out_data is malloc'd; caller frees.
 int gc_yaz0_decompress(const uint8_t* in, size_t in_n,
                        uint8_t** out_data, size_t* out_n);
 
+#ifdef __cplusplus
+}
 #endif
+
+#endif /* CONFLUENCE_YAZ0_H */

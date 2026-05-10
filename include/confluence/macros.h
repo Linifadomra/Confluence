@@ -22,4 +22,4 @@
     #include <strings.h>
 #endif
 
-#endif
+#endif /* CONFLUENCE_MACROS_H */
