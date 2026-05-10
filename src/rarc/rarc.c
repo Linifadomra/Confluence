@@ -300,10 +300,12 @@ int gc_arc_add_file(GCArc* arc, const char* node_type, const char* filename,
 
     size_t namelen = strlen(filename) + 1;
     size_t pool_used = 0;
-    for (int i = 0; i < new_count; i++)
-        if (arc->entries[i].name)
-            pool_used = (size_t)((arc->entries[i].name + strlen(arc->entries[i].name) + 1)
-                                 - arc->name_pool);
+    for (int i = 0; i < new_count; i++) {
+        if (!arc->entries[i].name) continue;
+        size_t end = (size_t)((arc->entries[i].name + strlen(arc->entries[i].name) + 1)
+                            - arc->name_pool);
+        if (end > pool_used) pool_used = end;
+    }
 
     char* new_pool = (char*)realloc(arc->name_pool, pool_used + namelen);
     if (!new_pool) return -1;
