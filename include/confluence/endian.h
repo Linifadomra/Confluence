@@ -1,6 +1,7 @@
 #ifndef CONFLUENCE_ENDIAN
 #define CONFLUENCE_ENDIAN
 
+#include <cstring>
 #include <stdint.h>
 #include <stddef.h>
 
@@ -22,6 +23,31 @@ static inline uint64_t gc_be64(const uint8_t* p) {
 
 static inline uint32_t gc_le32(const uint8_t* p) {
     return (uint32_t)p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16 | (uint32_t)p[3] << 24;
+}
+
+static inline void gc_write_be16(uint8_t* p, uint16_t v) {
+    p[0] = (uint8_t)(v >> 8);
+    p[1] = (uint8_t)(v & 0xFF);
+}
+
+static inline void gc_write_be32(uint8_t* p, uint32_t v) {
+    p[0] = (uint8_t)(v >> 24);
+    p[1] = (uint8_t)((v >> 16) & 0xFF);
+    p[2] = (uint8_t)((v >>  8) & 0xFF);
+    p[3] = (uint8_t)(v & 0xFF);
+}
+
+static inline float gc_be_f32(const uint8_t* p) {
+    uint32_t v = gc_be32(p);
+    float f;
+    memcpy(&f, &v, sizeof(f));
+    return f;
+}
+
+static inline void gc_write_be_f32(uint8_t* p, float v) {
+    uint32_t u;
+    memcpy(&u, &v, sizeof(u));
+    gc_write_be32(p, u);
 }
 
 #ifdef __cplusplus
