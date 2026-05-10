@@ -1,7 +1,7 @@
 #ifndef CONFLUENCE_ENDIAN
 #define CONFLUENCE_ENDIAN
 
-#include <cstring>
+#include <string.h>
 #include <stdint.h>
 #include <stddef.h>
 
