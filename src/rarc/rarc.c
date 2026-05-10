@@ -70,7 +70,10 @@ static GCArc* gc_arc_open_common(unsigned char* data, size_t size, int owns) {
     if (!dir_prefix) { gc_arc_close(arc); return NULL; }
     dir_prefix[0] = arc->name_pool;
     arc->name_pool[pool_used++] = '\0';
-
+    arc->num_nodes = (int)num_dirs;
+    arc->nodes = (GCNode*)calloc(num_dirs ? num_dirs : 1, sizeof(GCNode));
+    if (!arc->nodes) { gc_arc_close(arc); return NULL; }
+    
     for (unsigned int d = 0; d < num_dirs; d++) {
         const unsigned char* de = dirs + d * 0x10;
         unsigned short num_child = gc_be16(de + 0x0A);
