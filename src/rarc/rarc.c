@@ -6,6 +6,14 @@
 #include <string.h>
 #include <sys/stat.h>
 
+#define RARC_ATTR_FILE            0x01
+#define RARC_ATTR_DIRECTORY       0x02
+#define RARC_ATTR_COMPRESSED      0x04
+#define RARC_ATTR_PRELOAD_TO_MRAM 0x10
+#define RARC_ATTR_PRELOAD_TO_ARAM 0x20
+#define RARC_ATTR_LOAD_FROM_DVD   0x40
+#define RARC_ATTR_YAZ0_COMPRESSED 0x80
+
 typedef struct {
     char     type[5];
     char*    name;
@@ -13,7 +21,6 @@ typedef struct {
     uint16_t name_hash;
     uint16_t num_files;
     uint32_t first_file_index;
-    int      dir_entry_index;
 } GCNode;
 
 struct GCArc {
@@ -84,13 +91,33 @@ static GCArc* gc_arc_open_common(unsigned char* data, size_t size, int owns) {
             unsigned int idx = first + k;
             if (idx >= num_entries) continue;
             const unsigned char* fe = files + idx * 0x14;
-            unsigned short type     = gc_be16(fe + 0x04);
-            unsigned short name_off = gc_be16(fe + 0x06);
+            uint16_t       file_id  = gc_be16(fe + 0x00);
+            uint32_t       type_name= gc_be32(fe + 0x04);
+            uint8_t        attr     = (uint8_t)(type_name >> 24);
+            uint32_t       name_off = type_name & 0x00FFFFFFu;
             unsigned int   off_field= gc_be32(fe + 0x08);
             unsigned int   size     = gc_be32(fe + 0x0C);
             const char*    name     = strs + name_off;
+            int            is_dir   = (attr & RARC_ATTR_DIRECTORY) != 0;
+            int            is_dot   = is_dir && (strcmp(name, ".") == 0 || strcmp(name, "..") == 0);
 
-            if (type == 0x0200 && (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)) continue;
+            GCEntry* out = &arc->entries[idx];
+            out->id   = file_id;
+            out->attr = attr;
+
+            if (is_dot) {
+                size_t nlen = strlen(name);
+                size_t need = nlen + 1;
+                if (pool_used + need > pool_cap) continue;
+                char* slot = arc->name_pool + pool_used;
+                memcpy(slot, name, nlen + 1);
+                pool_used += need;
+                out->name = slot;
+                out->type = GC_ENTRY_DIR;
+                out->discOffset = off_field;
+                out->size = size;
+                continue;
+            }
 
             size_t plen = strlen(parent_prefix);
             size_t nlen = strlen(name);
@@ -101,22 +128,18 @@ static GCArc* gc_arc_open_common(unsigned char* data, size_t size, int owns) {
             else      { memcpy(full, name, nlen); full[nlen] = '\0'; }
             pool_used += need;
 
-            GCEntry* out = &arc->entries[idx];
             out->name = full;
-            if (type == 0x0200) {
+            if (is_dir) {
                 out->type = GC_ENTRY_DIR;
-                out->discOffset = 0;
-                out->size = 0;
-                // off_field on dir entries is the subdir index into the dir table.
-                if (off_field < num_dirs) { 
+                out->discOffset = off_field;
+                out->size = size;
+                if (off_field < num_dirs) {
                     dir_prefix[off_field] = full;
-                    arc->nodes[off_field].dir_entry_index = idx;
                 }
             } else {
                 out->type = GC_ENTRY_FILE;
                 out->discOffset = data_off + off_field;
                 out->size = size;
-                out->id = gc_be16(fe + 0x00);
             }
         }
     }
@@ -124,10 +147,6 @@ static GCArc* gc_arc_open_common(unsigned char* data, size_t size, int owns) {
     free(dir_prefix);
     arc->next_free_file_id = gc_be16(fst + 0x18);
     arc->keep_ids_synced   = fst[0x1A];
-
-    arc->num_nodes = (int)num_dirs;
-    arc->nodes = (GCNode*)calloc(num_dirs ? num_dirs : 1, sizeof(GCNode));
-    if (!arc->nodes) { gc_arc_close(arc); return NULL; }
 
     for (unsigned int d = 0; d < num_dirs; d++) {
         const unsigned char* de = dirs + d * 0x10;
@@ -286,6 +305,13 @@ int gc_arc_add_file(GCArc* arc, const char* node_type, const char* filename,
     arc->entries = new_entries;
 
     int insert_at = (int)(node->first_file_index + node->num_files);
+    while (insert_at > (int)node->first_file_index) {
+        GCEntry* prev = &arc->entries[insert_at - 1];
+        if (prev->type == GC_ENTRY_DIR && prev->name &&
+            (strcmp(prev->name, ".") == 0 || strcmp(prev->name, "..") == 0))
+            insert_at--;
+        else break;
+    }
 
     memmove(&arc->entries[insert_at + 1],
             &arc->entries[insert_at],
@@ -316,9 +342,6 @@ int gc_arc_add_file(GCArc* arc, const char* node_type, const char* filename,
         for (int i = 0; i < new_count; i++)
             if (arc->entries[i].name)
                 arc->entries[i].name += delta;
-        for (int i = 0; i < arc->num_nodes; i++)
-            if (arc->nodes[i].name)
-                arc->nodes[i].name += delta;
         arc->name_pool = new_pool;
     }
 
@@ -330,11 +353,17 @@ int gc_arc_add_file(GCArc* arc, const char* node_type, const char* filename,
     e->size     = (uint32_t)size;
     e->discOffset = 0;
 
+    size_t fn_len = namelen - 1;
+    int is_rel = (fn_len >= 4 && strcmp(filename + fn_len - 4, ".rel") == 0);
+    e->attr = (uint8_t)(RARC_ATTR_FILE |
+        (is_rel ? RARC_ATTR_PRELOAD_TO_ARAM : RARC_ATTR_PRELOAD_TO_MRAM));
+
     node->num_files++;
     arc->entry_count = new_count;
 
     if (arc->keep_ids_synced) {
         arc->next_free_file_id = (uint16_t)new_count;
+        e->id = (uint16_t)insert_at;
     } else {
         e->id = arc->next_free_file_id++;
     }
@@ -419,9 +448,11 @@ int gc_arc_save(GCArc* arc, void** out_data, size_t* out_size) {
     if (!entry_name_offs) { free(buf); return -1; }
     for (int i = 0; i < arc->entry_count; i++) {
         const char* name = arc->entries[i].name ? arc->entries[i].name : "";
-        if (strcmp(name, ".") == 0)       entry_name_offs[i] = dot_off;
-        else if (strcmp(name, "..") == 0) entry_name_offs[i] = dotdot_off;
-        else { uint32_t off; INTERN(name, off); entry_name_offs[i] = off; }
+        const char* slash = strrchr(name, '/');
+        const char* base = slash ? slash + 1 : name;
+        if (strcmp(base, ".") == 0)       entry_name_offs[i] = dot_off;
+        else if (strcmp(base, "..") == 0) entry_name_offs[i] = dotdot_off;
+        else { uint32_t off; INTERN(base, off); entry_name_offs[i] = off; }
     }
 
     for (int i = 0; i < arc->num_nodes; i++) {
@@ -445,18 +476,15 @@ int gc_arc_save(GCArc* arc, void** out_data, size_t* out_size) {
     uint32_t next_data_off = 0;
 
     for (int pass = 0; pass < 2; pass++) {
-        uint32_t pass_start = next_data_off;
         for (int i = 0; i < arc->entry_count; i++) {
             GCEntry* e = &arc->entries[i];
             if (e->type != GC_ENTRY_FILE) continue;
 
-            int is_aram = 0;
-            if (e->name) {
-                size_t nl = strlen(e->name);
-                if (nl >= 4 && strcmp(e->name + nl - 4, ".rel") == 0) is_aram = 1;
-            }
+            int is_aram = (e->attr & RARC_ATTR_PRELOAD_TO_ARAM) != 0;
             if (pass == 0 && is_aram)  continue;
             if (pass == 1 && !is_aram) continue;
+
+            if (arc->keep_ids_synced) e->id = (uint16_t)i;
 
             const void* src  = e->owns_buf ? e->buf : (arc->data + e->discOffset);
             uint32_t    sz   = e->size;
@@ -480,18 +508,16 @@ int gc_arc_save(GCArc* arc, void** out_data, size_t* out_size) {
 
         uint16_t hash = 0;
         const char* nm = e->name ? e->name : "";
-        for (const char* c = nm; *c; c++) { hash *= 3; hash += (uint8_t)*c; }
+        const char* nm_slash = strrchr(nm, '/');
+        const char* nm_base  = nm_slash ? nm_slash + 1 : nm;
+        for (const char* c = nm_base; *c; c++) { hash *= 3; hash += (uint8_t)*c; }
 
         uint16_t id = e->id;
-
-        uint8_t attr = (e->type == GC_ENTRY_FILE)
-            ? (uint8_t)(GC_ENTRY_FILE | 0x10)
-            : (uint8_t)0x02;
-
-        if (e->type == GC_ENTRY_FILE && e->name) {
-            size_t nl = strlen(e->name);
-            if (nl >= 4 && strcmp(e->name + nl - 4, ".rel") == 0)
-                attr = (uint8_t)(GC_ENTRY_FILE | 0x20);
+        uint8_t  attr = e->attr;
+        if (attr == 0) {
+            attr = (e->type == GC_ENTRY_FILE)
+                ? (uint8_t)(RARC_ATTR_FILE | RARC_ATTR_PRELOAD_TO_MRAM)
+                : RARC_ATTR_DIRECTORY;
         }
 
         uint32_t type_name = ((uint32_t)attr << 24) | (entry_name_offs[i] & 0x00FFFFFF);
@@ -502,13 +528,7 @@ int gc_arc_save(GCArc* arc, void** out_data, size_t* out_size) {
             data_or_node = e->discOffset;
             data_sz      = e->size;
         } else {
-            data_or_node = 0xFFFFFFFF;
-            for (int ni = 0; ni < arc->num_nodes; ni++) {
-                if (arc->nodes[ni].dir_entry_index == i) {
-                    data_or_node = (uint32_t)ni;
-                    break;
-                }
-            }
+            data_or_node = e->discOffset;
             data_sz = 0x10;
         }
 
