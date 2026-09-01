@@ -11,6 +11,8 @@ add_library(confluence
     src/yaz0/yaz0.c
 )
 
+add_library(Confluence::confluence ALIAS confluence)
+
 target_include_directories(confluence PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
